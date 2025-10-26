@@ -83,7 +83,7 @@ app.get("/", (req, res) => {
   res.json({ message: "Blog API is running 🚀" });
 });
 
-// 🟩 Register (all fields required)
+// 🟩 Register 
 app.post("/api/auth/register", async (req, res) => {
   const { username, email, password } = req.body;
 
@@ -251,3 +251,4 @@ app.get(
     }
   }
 );
+
