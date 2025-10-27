@@ -1,51 +1,183 @@
-import { Post } from '../types';
-import { Calendar, User, Trash2, Edit } from 'lucide-react';
+import { useState, useEffect } from "react";
+import { Post } from "../types";
+import {
+  Calendar,
+  User,
+  Trash2,
+  Edit,
+  Heart,
+  MessageSquare,
+  Eye,
+} from "lucide-react";
+import api from "../api/client";
+import Comments from "./Comments";
 
 interface PostCardProps {
   post: Post;
+  query?: string;
   onEdit?: (post: Post) => void;
   onDelete?: (id: number) => void;
+  onView?: (post: Post) => void; // 👁 Added for admin “View Details”
   showActions?: boolean;
+  onTagClick?: (tag: string) => void;
 }
 
-export const PostCard: React.FC<PostCardProps> = ({ post, onEdit, onDelete, showActions }) => {
-  return (
-    <div className="bg-white rounded-lg shadow-md hover:shadow-lg transition p-6 border border-gray-100">
-      <h3 className="text-2xl font-bold text-gray-800 mb-3">{post.title}</h3>
+export const PostCard: React.FC<PostCardProps> = ({
+  post,
+  query,
+  onEdit,
+  onDelete,
+  onView,
+  showActions,
+  onTagClick,
+}) => {
+  const [likes, setLikes] = useState<number>(0);
+  const [liked, setLiked] = useState<boolean>(false);
+  const [showComments, setShowComments] = useState(false);
 
-      <div className="flex items-center gap-4 text-sm text-gray-500 mb-4">
-        <div className="flex items-center gap-1">
-          <User className="w-4 h-4" />
-          <span>{post.author?.username || 'Unknown'}</span>
+  // 🩵 Fetch total likes for the post
+  const loadLikes = async () => {
+    try {
+      const { data } = await api.get(`/posts/${post.id}/likes`);
+      setLikes(data.count);
+    } catch {
+      // optional: show toast
+    }
+  };
+
+  // ❤️ Toggle like/unlike
+  const handleLike = async () => {
+    try {
+      const { data } = await api.post(`/posts/${post.id}/like`);
+      setLiked(data.liked);
+      await loadLikes();
+    } catch {
+      // optional: show toast
+    }
+  };
+
+  useEffect(() => {
+    loadLikes();
+  }, []);
+
+  // 🧠 Highlight search keyword (used in user dashboard)
+  const highlightText = (text: string) => {
+    if (!query?.trim()) return text;
+    const regex = new RegExp(`(${query})`, "gi");
+    return text.split(regex).map((part, i) =>
+      regex.test(part) ? (
+        <mark key={i} className='bg-yellow-200 text-gray-900 rounded px-1'>
+          {part}
+        </mark>
+      ) : (
+        part
+      )
+    );
+  };
+
+  return (
+    <div className='bg-white rounded-lg shadow-md hover:shadow-lg transition p-6 border border-gray-100'>
+      {/* 🧾 Title */}
+      <h3 className='text-2xl font-bold text-gray-800 mb-3'>
+        {highlightText(post.title)}
+      </h3>
+
+      {/* 🧍 Author + Date */}
+      <div className='flex items-center gap-4 text-sm text-gray-500 mb-4'>
+        <div className='flex items-center gap-1'>
+          <User className='w-4 h-4' />
+          <span>{post.author?.username || post.author || "Unknown"}</span>
         </div>
-        <div className="flex items-center gap-1">
-          <Calendar className="w-4 h-4" />
-          <span>{new Date(post.created_at).toLocaleDateString()}</span>
+        <div className='flex items-center gap-1'>
+          <Calendar className='w-4 h-4' />
+          <span>
+            {new Date(post.created_at).toLocaleDateString(undefined, {
+              year: "numeric",
+              month: "short",
+              day: "numeric",
+            })}
+          </span>
         </div>
       </div>
 
-      <p className="text-gray-700 leading-relaxed mb-4">{post.content}</p>
+      {/* 📄 Content */}
+      <p className='text-gray-700 leading-relaxed mb-4'>
+        {highlightText(post.content)}
+      </p>
 
-      {showActions && (onEdit || onDelete) && (
-        <div className="flex gap-3 pt-4 border-t border-gray-100">
+      {/* 🏷 Tags */}
+      {post.tags && post.tags.length > 0 && (
+        <div className='flex flex-wrap gap-2 mb-4'>
+          {post.tags.map((tag) => (
+            <button
+              key={tag}
+              onClick={() => onTagClick?.(tag)}
+              className='px-2 py-1 text-xs bg-blue-50 text-blue-700 rounded-full border border-blue-100 hover:bg-blue-100 transition'
+            >
+              #{tag}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* ❤️ Likes + 💬 Comments */}
+      <div className='flex items-center justify-between mt-2'>
+        <button
+          onClick={handleLike}
+          className={`flex items-center gap-2 text-sm ${
+            liked ? "text-red-600" : "text-gray-600 hover:text-red-500"
+          }`}
+        >
+          <Heart className={`w-4 h-4 ${liked ? "fill-red-500" : ""}`} />
+          {likes}
+        </button>
+
+        <button
+          onClick={() => setShowComments((prev) => !prev)}
+          className='flex items-center gap-2 text-sm text-gray-600 hover:text-blue-600'
+        >
+          <MessageSquare className='w-4 h-4' />
+          Comments
+        </button>
+      </div>
+
+      {/* 🧰 Admin/User Actions */}
+      {showActions && (onEdit || onDelete || onView) && (
+        <div className='flex flex-wrap gap-3 pt-4 mt-4 border-t border-gray-100'>
+          {onView && (
+            <button
+              onClick={() => onView(post)}
+              className='flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition text-sm font-medium'
+            >
+              <Eye className='w-4 h-4' />
+              View
+            </button>
+          )}
           {onEdit && (
             <button
               onClick={() => onEdit(post)}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm font-medium"
+              className='flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm font-medium'
             >
-              <Edit className="w-4 h-4" />
+              <Edit className='w-4 h-4' />
               Edit
             </button>
           )}
           {onDelete && (
             <button
               onClick={() => onDelete(post.id)}
-              className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition text-sm font-medium"
+              className='flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition text-sm font-medium'
             >
-              <Trash2 className="w-4 h-4" />
+              <Trash2 className='w-4 h-4' />
               Delete
             </button>
           )}
+        </div>
+      )}
+
+      {/* 💬 Comments section */}
+      {showComments && (
+        <div className='mt-4'>
+          <Comments postId={post.id} />
         </div>
       )}
     </div>

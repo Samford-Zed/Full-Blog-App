@@ -7,6 +7,8 @@ import { PostCard } from "../components/PostCard";
 import { CreatePostModal } from "../components/CreatePostModal";
 import { EditPostModal } from "../components/EditPostModal";
 import { LogOut, Plus, Users, BookOpen, Shield } from "lucide-react";
+import { PostDetailsModal } from "../components/PostDetailsModal";
+import api from "../api/client";
 
 export default function AdminDashboard() {
   const { user, logout } = useAuth();
@@ -18,6 +20,8 @@ export default function AdminDashboard() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const [activeTab, setActiveTab] = useState<"posts" | "users">("posts");
+  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+  const [selectedComments, setSelectedComments] = useState<any[]>([]);
 
   useEffect(() => {
     loadData();
@@ -67,6 +71,18 @@ export default function AdminDashboard() {
     window.location.href = "/login";
   };
 
+  // 👁 View post details
+  const handleViewDetails = async (post: Post) => {
+    try {
+      setSelectedPost(post);
+      const { data } = await api.get(`/posts/${post.id}/comments`);
+      setSelectedComments(data);
+      setIsDetailsModalOpen(true);
+    } catch (err) {
+      console.error("Failed to load comments:", err);
+    }
+  };
+
   if (user?.role !== "admin") {
     return (
       <div className='min-h-screen flex items-center justify-center bg-gray-50'>
@@ -95,10 +111,10 @@ export default function AdminDashboard() {
                 Admin Dashboard
               </h1>
             </div>
-
             <div className='flex items-center gap-4'>
               <span className='text-gray-700 font-medium'>
-                <span className='text-blue-600'>{user?.username}</span> (Admin)
+                {user?.username}{" "}
+                <span className='text-sm text-blue-600'>(Admin)</span>
               </span>
               <button
                 onClick={handleLogout}
@@ -112,7 +128,6 @@ export default function AdminDashboard() {
         </div>
       </nav>
 
-      {/* Main Content */}
       <div className='max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8'>
         {/* Tabs */}
         <div className='flex gap-4 mb-8'>
@@ -140,31 +155,30 @@ export default function AdminDashboard() {
           </button>
         </div>
 
-        {/* Error Alert */}
+        {/* Errors */}
         {error && (
           <div className='mb-6 p-4 bg-red-50 border border-red-200 rounded-lg'>
             <p className='text-red-600'>{error}</p>
           </div>
         )}
 
-        {/* Posts Section */}
+        {/* POSTS TAB */}
         {activeTab === "posts" && (
           <>
             <div className='flex justify-between items-center mb-8'>
               <div>
                 <h2 className='text-3xl font-bold text-gray-800'>All Posts</h2>
                 <p className='text-gray-600 mt-1'>
-                  Create, edit, and delete blog posts
+                  View, edit, and delete blog posts
                 </p>
               </div>
-
-              <button
+              {/*  <button
                 onClick={() => setIsCreateModalOpen(true)}
                 className='flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition shadow-md hover:shadow-lg font-medium'
               >
                 <Plus className='w-5 h-5' />
                 Create Post
-              </button>
+              </button>*/}
             </div>
 
             {loading ? (
@@ -175,11 +189,8 @@ export default function AdminDashboard() {
               <div className='bg-white rounded-lg shadow-md p-12 text-center'>
                 <BookOpen className='w-16 h-16 text-gray-300 mx-auto mb-4' />
                 <h3 className='text-xl font-semibold text-gray-700 mb-2'>
-                  No posts yet
+                  No posts found
                 </h3>
-                <p className='text-gray-500'>
-                  Create your first post to get started!
-                </p>
               </div>
             ) : (
               <div className='grid gap-6 md:grid-cols-2 lg:grid-cols-3'>
@@ -188,11 +199,12 @@ export default function AdminDashboard() {
                     key={post.id}
                     post={post}
                     showActions
-                    onEdit={(post) => {
-                      setSelectedPost(post);
+                    onEdit={(p) => {
+                      setSelectedPost(p);
                       setIsEditModalOpen(true);
                     }}
                     onDelete={handleDeletePost}
+                    onView={handleViewDetails} // 👁 added view button
                   />
                 ))}
               </div>
@@ -200,86 +212,61 @@ export default function AdminDashboard() {
           </>
         )}
 
-        {/* Users Section */}
+        {/* USERS TAB */}
         {activeTab === "users" && (
-          <>
-            <div className='mb-8'>
-              <h2 className='text-3xl font-bold text-gray-800'>All Users</h2>
-              <p className='text-gray-600 mt-1'>
-                View and manage registered users
-              </p>
-            </div>
-
-            {loading ? (
-              <div className='flex items-center justify-center py-20'>
-                <div className='animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600'></div>
-              </div>
-            ) : users.length === 0 ? (
-              <div className='bg-white rounded-lg shadow-md p-12 text-center'>
-                <Users className='w-16 h-16 text-gray-300 mx-auto mb-4' />
-                <h3 className='text-xl font-semibold text-gray-700 mb-2'>
-                  No users found
-                </h3>
-              </div>
-            ) : (
-              <div className='bg-white rounded-lg shadow-md overflow-hidden'>
-                <table className='min-w-full divide-y divide-gray-200'>
-                  <thead className='bg-gray-50'>
-                    <tr>
-                      <th className='px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
-                        ID
-                      </th>
-                      <th className='px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
-                        Username
-                      </th>
-                      <th className='px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
-                        Email
-                      </th>
-                      <th className='px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
-                        Role
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className='bg-white divide-y divide-gray-200'>
-                    {users.map((user) => (
-                      <tr key={user.id} className='hover:bg-gray-50 transition'>
-                        <td className='px-6 py-4 text-sm text-gray-900'>
-                          {user.id}
-                        </td>
-                        <td className='px-6 py-4 text-sm font-medium text-gray-900'>
-                          {user.username}
-                        </td>
-                        <td className='px-6 py-4 text-sm text-gray-700'>
-                          {user.email}
-                        </td>
-                        <td className='px-6 py-4 text-sm'>
-                          <span
-                            className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                              user.role === "admin"
-                                ? "bg-blue-100 text-blue-800"
-                                : "bg-green-100 text-green-800"
-                            }`}
-                          >
-                            {user.role}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </>
+          <div className='bg-white rounded-lg shadow-md overflow-hidden'>
+            <table className='min-w-full divide-y divide-gray-200'>
+              <thead className='bg-gray-50'>
+                <tr>
+                  <th className='px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
+                    ID
+                  </th>
+                  <th className='px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
+                    Username
+                  </th>
+                  <th className='px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
+                    Email
+                  </th>
+                  <th className='px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
+                    Role
+                  </th>
+                </tr>
+              </thead>
+              <tbody className='bg-white divide-y divide-gray-200'>
+                {users.map((u) => (
+                  <tr key={u.id} className='hover:bg-gray-50 transition'>
+                    <td className='px-6 py-4 text-sm text-gray-900'>{u.id}</td>
+                    <td className='px-6 py-4 text-sm font-medium text-gray-900'>
+                      {u.username}
+                    </td>
+                    <td className='px-6 py-4 text-sm text-gray-700'>
+                      {u.email}
+                    </td>
+                    <td className='px-6 py-4 text-sm'>
+                      <span
+                        className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                          u.role === "admin"
+                            ? "bg-blue-100 text-blue-800"
+                            : "bg-green-100 text-green-800"
+                        }`}
+                      >
+                        {u.role}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
-      {/* Modals */}
+      {/* 🧩 Modals */}
       <CreatePostModal
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
         onSubmit={handleCreatePost}
       />
-
       <EditPostModal
         isOpen={isEditModalOpen}
         post={selectedPost}
@@ -288,6 +275,15 @@ export default function AdminDashboard() {
           setSelectedPost(null);
         }}
         onSubmit={handleEditPost}
+      />
+      <PostDetailsModal
+        isOpen={isDetailsModalOpen}
+        post={selectedPost}
+        comments={selectedComments}
+        onClose={() => {
+          setIsDetailsModalOpen(false);
+          setSelectedPost(null);
+        }}
       />
     </div>
   );

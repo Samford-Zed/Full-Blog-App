@@ -4,7 +4,6 @@ import { useAuth } from "../contexts/AuthContext";
 import { LogIn } from "lucide-react";
 
 export default function Login() {
-  // ✅ Default export so App.tsx can import Login directly
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -18,15 +17,24 @@ export default function Login() {
     setLoading(true);
 
     try {
-      await login(email, password);
-      const user = JSON.parse(localStorage.getItem("user") || "{}");
+      // Call the AuthContext login
+      const loggedUser = await login(email, password);
 
-      if (user.role === "admin") {
+      // ✅ The backend returns user info inside the response
+      // So ensure AuthContext stores it in localStorage
+      const storedUser =
+        loggedUser || JSON.parse(localStorage.getItem("user") || "{}");
+
+      if (storedUser.role === "admin") {
         navigate("/admin");
-      } else {
+      } else if (storedUser.role === "user") {
         navigate("/dashboard");
+      } else {
+        // fallback (no role found)
+        navigate("/");
       }
     } catch (err: any) {
+      console.error("Login error:", err);
       setError(
         err.response?.data?.message || "Login failed. Please try again."
       );
