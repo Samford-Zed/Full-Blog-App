@@ -317,9 +317,28 @@ app.post("/api/posts/:id/like", authenticateToken, async (req, res) => {
         "DELETE FROM post_likes WHERE post_id=$1 AND user_id=$2",
         [postId, userId]
       );
-      res.json({ message: "Welcome, Admin!", users: users.rows });
-    } catch (err) {
-      res.status(500).json({ message: err.message });
+      return res.json({ message: "Like removed" });
     }
+
+    const result = await pool.query(
+      "INSERT INTO post_likes (post_id, user_id) VALUES ($1, $2) RETURNING *",
+      [postId, userId]
+    );
+
+    res.status(201).json({ message: "Post liked", like: result.rows[0] });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
-);
+});
+// 🟢 Get all users (Admin only)
+app.get("/api/auth/users", authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const result = await pool.query(
+      "SELECT id, username, email, role FROM users ORDER BY id ASC"
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error("❌ Error fetching users:", err.message);
+    res.status(500).json({ message: "Failed to load users" });
+  }
+});
