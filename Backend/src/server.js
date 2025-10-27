@@ -11,7 +11,7 @@ const { Pool } = pkg;
 const app = express();
 app.use(express.json());
 
-// 🧩 Enable CORS for your React frontend
+// ✅ Allow frontend connection
 app.use(
   cors({
     origin: "http://localhost:5173",
@@ -19,7 +19,7 @@ app.use(
   })
 );
 
-// 🧩 PostgreSQL connection
+// ✅ PostgreSQL connection
 const pool = new Pool({
   host: process.env.DB_HOST,
   port: process.env.DB_PORT,
@@ -28,7 +28,7 @@ const pool = new Pool({
   database: process.env.DB_NAME,
 });
 
-// 🧠 Middleware: Verify JWT
+// 🧠 Middleware for authentication
 function authenticateToken(req, res, next) {
   const authHeader = req.headers["authorization"];
   const token = authHeader && authHeader.split(" ")[1];
@@ -42,7 +42,7 @@ function authenticateToken(req, res, next) {
   });
 }
 
-// 🧠 Middleware: Admin-only access
+// 🧠 Middleware for admin authorization
 function isAdmin(req, res, next) {
   if (req.user.role !== "admin") {
     return res.status(403).json({ message: "Admin access required" });
@@ -50,22 +50,21 @@ function isAdmin(req, res, next) {
   next();
 }
 
-// ✅ Ensure default admin exists
+// ✅ Ensure a default admin exists
 async function ensureAdmin() {
-  const check = await pool.query("SELECT * FROM users WHERE role = 'admin'");
-  if (check.rows.length === 0) {
+  const result = await pool.query("SELECT * FROM users WHERE role = 'admin'");
+  if (result.rows.length === 0) {
     const hashed = await bcrypt.hash("admin123", 10);
     await pool.query(
       "INSERT INTO users (username, email, password, role) VALUES ($1, $2, $3, 'admin')",
       ["admin", "admin@example.com", hashed]
     );
-    console.log("✅ Default admin created: admin@example.com / admin123");
+    console.log("✅ Default admin created → admin@example.com / admin123");
   }
 }
 
-// ✅ Start server after DB connection
+// ✅ Start the server after DB connection
 const PORT = Number(process.env.PORT) || 4000;
-
 pool
   .connect()
   .then(async () => {
@@ -78,35 +77,30 @@ pool
     process.exit(1);
   });
 
-// 🟢 Root route
-app.get("/", (req, res) => {
+// 🟢 Root
+app.get("/", (_, res) => {
   res.json({ message: "Blog API is running 🚀" });
 });
 
-// 🟩 Register 
+// 🟩 Register (all fields required)
 app.post("/api/auth/register", async (req, res) => {
   const { username, email, password } = req.body;
-
-  console.log("📩 Register request:", req.body);
-
   if (!username?.trim() || !email?.trim() || !password?.trim()) {
     return res.status(400).json({ message: "All fields are required" });
   }
 
   try {
-    // Prevent duplicate email
-    const existing = await pool.query("SELECT * FROM users WHERE email = $1", [
+    const exists = await pool.query("SELECT * FROM users WHERE email = $1", [
       email,
     ]);
-    if (existing.rows.length > 0) {
+    if (exists.rows.length > 0) {
       return res.status(400).json({ message: "Email already registered" });
     }
 
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashed = await bcrypt.hash(password, 10);
     const result = await pool.query(
       "INSERT INTO users (username, email, password, role) VALUES ($1, $2, $3, 'user') RETURNING id, username, email, role",
-      [username.trim(), email.trim(), hashedPassword]
+      [username.trim(), email.trim(), hashed]
     );
 
     res.status(201).json(result.rows[0]);
@@ -116,20 +110,18 @@ app.post("/api/auth/register", async (req, res) => {
   }
 });
 
-// 🟨 Login (required fields)
+// 🟨 Login
 app.post("/api/auth/login", async (req, res) => {
   const { email, password } = req.body;
-
   if (!email?.trim() || !password?.trim()) {
     return res.status(400).json({ message: "Email and password are required" });
   }
 
   try {
     const result = await pool.query("SELECT * FROM users WHERE email = $1", [
-      email.trim(),
+      email,
     ]);
     const user = result.rows[0];
-
     if (!user) return res.status(404).json({ message: "User not found" });
 
     const valid = await bcrypt.compare(password, user.password);
@@ -156,22 +148,40 @@ app.post("/api/auth/login", async (req, res) => {
   }
 });
 
+//
+// ─── POSTS ──────────────────────────────────────────────────────────────────────
+//
+
 // 🟢 Get all posts (auth required)
 app.get("/api/posts", authenticateToken, async (req, res) => {
   try {
-    const result = await pool.query("SELECT * FROM posts ORDER BY id DESC");
+    const result = await pool.query(`
+      SELECT 
+        p.id,
+        p.title,
+        p.content,
+        p.created_at,
+        u.username AS author
+      FROM posts p
+      LEFT JOIN users u ON p.user_id = u.id
+      ORDER BY p.id DESC
+    `);
     res.json(result.rows);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
-// 🟡 Get one post
+// 🟨 Get a single post
 app.get("/api/posts/:id", authenticateToken, async (req, res) => {
   try {
-    const result = await pool.query("SELECT * FROM posts WHERE id = $1", [
-      req.params.id,
-    ]);
+    const result = await pool.query(
+      `SELECT p.*, u.username AS author
+       FROM posts p
+       LEFT JOIN users u ON p.user_id = u.id
+       WHERE p.id = $1`,
+      [req.params.id]
+    );
     if (result.rows.length === 0)
       return res.status(404).json({ message: "Post not found" });
     res.json(result.rows[0]);
@@ -180,47 +190,64 @@ app.get("/api/posts/:id", authenticateToken, async (req, res) => {
   }
 });
 
-// 🔵 Create post (all fields required)
+// 🔵 Create post (any logged-in user)
 app.post("/api/posts", authenticateToken, async (req, res) => {
   const { title, content } = req.body;
-
   if (!title?.trim() || !content?.trim()) {
     return res.status(400).json({ message: "Title and content are required" });
   }
 
   try {
     const result = await pool.query(
-      "INSERT INTO posts (title, content) VALUES ($1, $2) RETURNING *",
-      [title.trim(), content.trim()]
+      `INSERT INTO posts (title, content, user_id)
+       VALUES ($1, $2, $3)
+       RETURNING id, title, content, user_id, created_at`,
+      [title.trim(), content.trim(), req.user.id]
     );
-    res.status(201).json(result.rows[0]);
+
+    const newPost = result.rows[0];
+    const userRes = await pool.query(
+      "SELECT username FROM users WHERE id = $1",
+      [req.user.id]
+    );
+    newPost.author = userRes.rows[0].username;
+
+    res.status(201).json(newPost);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
-// 🟠 Update post (required fields)
+// 🟧 Update post (owner or admin)
 app.put("/api/posts/:id", authenticateToken, async (req, res) => {
   const { title, content } = req.body;
-
   if (!title?.trim() || !content?.trim()) {
     return res.status(400).json({ message: "Title and content are required" });
   }
 
   try {
+    const existing = await pool.query("SELECT * FROM posts WHERE id = $1", [
+      req.params.id,
+    ]);
+    if (existing.rows.length === 0)
+      return res.status(404).json({ message: "Post not found" });
+
+    // Only owner or admin can edit
+    if (existing.rows[0].user_id !== req.user.id && req.user.role !== "admin") {
+      return res.status(403).json({ message: "Not authorized" });
+    }
+
     const result = await pool.query(
       "UPDATE posts SET title=$1, content=$2 WHERE id=$3 RETURNING *",
       [title.trim(), content.trim(), req.params.id]
     );
-    if (result.rows.length === 0)
-      return res.status(404).json({ message: "Post not found" });
     res.json(result.rows[0]);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
-// 🔴 Delete post (admin only)
+// 🔴 Delete post (Admin only)
 app.delete("/api/posts/:id", authenticateToken, isAdmin, async (req, res) => {
   try {
     const result = await pool.query(
@@ -235,15 +262,60 @@ app.delete("/api/posts/:id", authenticateToken, isAdmin, async (req, res) => {
   }
 });
 
-// ⚙️ Admin dashboard
-app.get(
-  "/api/admin/dashboard",
-  authenticateToken,
-  isAdmin,
-  async (req, res) => {
-    try {
-      const users = await pool.query(
-        "SELECT id, username, email, role FROM users"
+//
+// ─── COMMENTS ───────────────────────────────────────────────────────────────────
+//
+
+app.get("/api/posts/:id/comments", authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT c.*, u.username 
+       FROM comments c 
+       JOIN users u ON c.user_id = u.id
+       WHERE c.post_id = $1
+       ORDER BY c.created_at DESC`,
+      [req.params.id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/posts/:id/comments", authenticateToken, async (req, res) => {
+  const { content } = req.body;
+  if (!content?.trim())
+    return res.status(400).json({ message: "Comment content required" });
+
+  try {
+    const result = await pool.query(
+      "INSERT INTO comments (post_id, user_id, content) VALUES ($1, $2, $3) RETURNING *",
+      [req.params.id, req.user.id, content.trim()]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+//
+// ─── LIKES ──────────────────────────────────────────────────────────────────────
+//
+
+app.post("/api/posts/:id/like", authenticateToken, async (req, res) => {
+  try {
+    const { id: userId } = req.user;
+    const { id: postId } = req.params;
+
+    const existing = await pool.query(
+      "SELECT * FROM post_likes WHERE post_id=$1 AND user_id=$2",
+      [postId, userId]
+    );
+
+    if (existing.rows.length > 0) {
+      await pool.query(
+        "DELETE FROM post_likes WHERE post_id=$1 AND user_id=$2",
+        [postId, userId]
       );
       res.json({ message: "Welcome, Admin!", users: users.rows });
     } catch (err) {
@@ -251,4 +323,3 @@ app.get(
     }
   }
 );
-
