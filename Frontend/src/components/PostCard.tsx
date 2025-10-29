@@ -17,7 +17,7 @@ interface PostCardProps {
   query?: string;
   onEdit?: (post: Post) => void;
   onDelete?: (id: number) => void;
-  onView?: (post: Post) => void; // 👁 Added for admin “View Details”
+  onView?: (post: Post) => void;
   showActions?: boolean;
   onTagClick?: (tag: string) => void;
 }
@@ -33,34 +33,41 @@ export const PostCard: React.FC<PostCardProps> = ({
 }) => {
   const [likes, setLikes] = useState<number>(0);
   const [liked, setLiked] = useState<boolean>(false);
+  const [loadingLike, setLoadingLike] = useState(false);
   const [showComments, setShowComments] = useState(false);
 
-  // 🩵 Fetch total likes for the post
+  // 🩵 Fetch total likes + user like status
   const loadLikes = async () => {
     try {
-      const { data } = await api.get(`/posts/${post.id}/likes`);
-      setLikes(data.count);
-    } catch {
-      // optional: show toast
+      const res = await api.get(`/posts/${post.id}/likes`);
+      if (res?.data) {
+        setLikes(res.data.count || 0);
+        setLiked(!!res.data.liked);
+      }
+    } catch (err: any) {
+      console.warn("⚠️ Could not load likes:", err.message);
     }
   };
 
   // ❤️ Toggle like/unlike
   const handleLike = async () => {
+    if (loadingLike) return;
     try {
-      const { data } = await api.post(`/posts/${post.id}/like`);
-      setLiked(data.liked);
+      setLoadingLike(true);
+      await api.post(`/posts/${post.id}/like`);
       await loadLikes();
-    } catch {
-      // optional: show toast
+    } catch (err: any) {
+      console.error("❌ Like request failed:", err.message);
+    } finally {
+      setLoadingLike(false);
     }
   };
 
   useEffect(() => {
     loadLikes();
-  }, []);
+  }, [post.id]);
 
-  // 🧠 Highlight search keyword (used in user dashboard)
+  // 🧠 Highlight search term
   const highlightText = (text: string) => {
     if (!query?.trim()) return text;
     const regex = new RegExp(`(${query})`, "gi");
@@ -79,7 +86,7 @@ export const PostCard: React.FC<PostCardProps> = ({
     <div className='bg-white rounded-lg shadow-md hover:shadow-lg transition p-6 border border-gray-100'>
       {/* 🧾 Title */}
       <h3 className='text-2xl font-bold text-gray-800 mb-3'>
-        {highlightText(post.title)}
+        {highlightText(post.title || "")}
       </h3>
 
       {/* 🧍 Author + Date */}
@@ -91,22 +98,25 @@ export const PostCard: React.FC<PostCardProps> = ({
         <div className='flex items-center gap-1'>
           <Calendar className='w-4 h-4' />
           <span>
-            {new Date(post.created_at).toLocaleDateString(undefined, {
-              year: "numeric",
-              month: "short",
-              day: "numeric",
-            })}
+            {post.created_at
+              ? new Date(post.created_at).toLocaleDateString(undefined, {
+                  year: "numeric",
+                  month: "short",
+                  day: "numeric",
+                })
+              : ""}
           </span>
         </div>
       </div>
 
       {/* 📄 Content */}
-      <p className='text-gray-700 leading-relaxed mb-4'>
-        {highlightText(post.content)}
-      </p>
+      <div
+        className='prose prose-sm text-gray-700 leading-relaxed mb-4 max-w-none'
+        dangerouslySetInnerHTML={{ __html: post.content || "" }}
+      />
 
       {/* 🏷 Tags */}
-      {post.tags && post.tags.length > 0 && (
+      {Array.isArray(post.tags) && post.tags.length > 0 && (
         <div className='flex flex-wrap gap-2 mb-4'>
           {post.tags.map((tag) => (
             <button
@@ -124,24 +134,29 @@ export const PostCard: React.FC<PostCardProps> = ({
       <div className='flex items-center justify-between mt-2'>
         <button
           onClick={handleLike}
-          className={`flex items-center gap-2 text-sm ${
+          disabled={loadingLike}
+          className={`flex items-center gap-2 text-sm transition ${
             liked ? "text-red-600" : "text-gray-600 hover:text-red-500"
           }`}
         >
-          <Heart className={`w-4 h-4 ${liked ? "fill-red-500" : ""}`} />
-          {likes}
+          <Heart
+            className={`w-4 h-4 transition ${
+              liked ? "fill-red-500 scale-110" : ""
+            }`}
+          />
+          {loadingLike ? "..." : likes}
         </button>
 
         <button
-          onClick={() => setShowComments((prev) => !prev)}
-          className='flex items-center gap-2 text-sm text-gray-600 hover:text-blue-600'
+          onClick={() => setShowComments((p) => !p)}
+          className='flex items-center gap-2 text-sm text-gray-600 hover:text-blue-600 transition'
         >
           <MessageSquare className='w-4 h-4' />
           Comments
         </button>
       </div>
 
-      {/* 🧰 Admin/User Actions */}
+      {/* 🧰 Actions (Admin/User) */}
       {showActions && (onEdit || onDelete || onView) && (
         <div className='flex flex-wrap gap-3 pt-4 mt-4 border-t border-gray-100'>
           {onView && (

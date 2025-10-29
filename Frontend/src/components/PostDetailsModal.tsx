@@ -58,7 +58,10 @@ export const PostDetailsModal: React.FC<PostDetailsModalProps> = ({
             </div>
           </div>
 
-          <p className='text-gray-700 leading-relaxed'>{post.content}</p>
+          <div
+            className='prose prose-sm text-gray-800 max-w-none'
+            dangerouslySetInnerHTML={{ __html: post.content }}
+          />
 
           {/* Comments Section */}
           <div className='mt-6 border-t pt-4'>

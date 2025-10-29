@@ -6,22 +6,40 @@ import { Post, User } from "../types";
 import { PostCard } from "../components/PostCard";
 import { CreatePostModal } from "../components/CreatePostModal";
 import { EditPostModal } from "../components/EditPostModal";
-import { LogOut, Plus, Users, BookOpen, Shield } from "lucide-react";
 import { PostDetailsModal } from "../components/PostDetailsModal";
 import api from "../api/client";
+import {
+  LogOut,
+  Plus,
+  Users,
+  BookOpen,
+  Shield,
+  BarChart2,
+  Loader2,
+} from "lucide-react";
 
 export default function AdminDashboard() {
   const { user, logout } = useAuth();
+
   const [posts, setPosts] = useState<Post[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [activeTab, setActiveTab] = useState<"overview" | "posts" | "users">(
+    "overview"
+  );
+
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [selectedPost, setSelectedPost] = useState<Post | null>(null);
-  const [activeTab, setActiveTab] = useState<"posts" | "users">("posts");
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+  const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const [selectedComments, setSelectedComments] = useState<any[]>([]);
+
+  const [stats, setStats] = useState({
+    userCount: 0,
+    postCount: 0,
+    commentCount: 0,
+  });
 
   useEffect(() => {
     loadData();
@@ -30,14 +48,24 @@ export default function AdminDashboard() {
   const loadData = async () => {
     try {
       setLoading(true);
+      setError("");
+
       if (activeTab === "posts") {
         const postsData = await postsApi.getAllPosts();
         setPosts(postsData);
-      } else {
+      } else if (activeTab === "users") {
         const usersData = await authApi.getUsers();
         setUsers(usersData);
+      } else if (activeTab === "overview") {
+        const postsData = await postsApi.getAllPosts();
+        const usersData = await authApi.getUsers();
+        const { data: commentsData } = await api.get("/comments/count");
+        setStats({
+          userCount: usersData.length,
+          postCount: postsData.length,
+          commentCount: commentsData.count,
+        });
       }
-      setError("");
     } catch (err: any) {
       setError(err.response?.data?.message || "Failed to load data");
     } finally {
@@ -71,7 +99,6 @@ export default function AdminDashboard() {
     window.location.href = "/login";
   };
 
-  // 👁 View post details
   const handleViewDetails = async (post: Post) => {
     try {
       setSelectedPost(post);
@@ -128,62 +155,84 @@ export default function AdminDashboard() {
         </div>
       </nav>
 
+      {/* Tabs */}
       <div className='max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8'>
-        {/* Tabs */}
         <div className='flex gap-4 mb-8'>
-          <button
-            onClick={() => setActiveTab("posts")}
-            className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition ${
-              activeTab === "posts"
-                ? "bg-blue-600 text-white shadow-md"
-                : "bg-white text-gray-700 hover:bg-gray-50 border border-gray-200"
-            }`}
-          >
-            <BookOpen className='w-5 h-5' />
-            Manage Posts
-          </button>
-          <button
-            onClick={() => setActiveTab("users")}
-            className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition ${
-              activeTab === "users"
-                ? "bg-blue-600 text-white shadow-md"
-                : "bg-white text-gray-700 hover:bg-gray-50 border border-gray-200"
-            }`}
-          >
-            <Users className='w-5 h-5' />
-            Manage Users
-          </button>
+          {[
+            { key: "overview", label: "Overview", icon: BarChart2 },
+            { key: "posts", label: "Manage Posts", icon: BookOpen },
+            { key: "users", label: "Manage Users", icon: Users },
+          ].map(({ key, label, icon: Icon }) => (
+            <button
+              key={key}
+              onClick={() => setActiveTab(key as any)}
+              className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition ${
+                activeTab === key
+                  ? "bg-blue-600 text-white shadow-md"
+                  : "bg-white text-gray-700 hover:bg-gray-50 border border-gray-200"
+              }`}
+            >
+              <Icon className='w-5 h-5' />
+              {label}
+            </button>
+          ))}
         </div>
 
-        {/* Errors */}
+        {/* Error Display */}
         {error && (
           <div className='mb-6 p-4 bg-red-50 border border-red-200 rounded-lg'>
             <p className='text-red-600'>{error}</p>
           </div>
         )}
 
-        {/* POSTS TAB */}
+        {/* Overview Tab */}
+        {activeTab === "overview" && (
+          <div className='grid gap-6 md:grid-cols-3'>
+            {[
+              {
+                title: "Total Users",
+                value: stats.userCount,
+                color: "bg-blue-100 text-blue-700",
+              },
+              {
+                title: "Total Posts",
+                value: stats.postCount,
+                color: "bg-green-100 text-green-700",
+              },
+              {
+                title: "Total Comments",
+                value: stats.commentCount,
+                color: "bg-yellow-100 text-yellow-700",
+              },
+            ].map(({ title, value, color }) => (
+              <div
+                key={title}
+                className={`p-6 rounded-lg shadow bg-white border ${color}`}
+              >
+                <h2 className='text-lg font-semibold'>{title}</h2>
+                <p className='text-3xl font-bold mt-2'>{value}</p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Posts Tab */}
         {activeTab === "posts" && (
           <>
             <div className='flex justify-between items-center mb-8'>
-              <div>
-                <h2 className='text-3xl font-bold text-gray-800'>All Posts</h2>
-                <p className='text-gray-600 mt-1'>
-                  View, edit, and delete blog posts
-                </p>
-              </div>
-              {/*  <button
+              <h2 className='text-3xl font-bold text-gray-800'>All Posts</h2>
+              <button
                 onClick={() => setIsCreateModalOpen(true)}
-                className='flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition shadow-md hover:shadow-lg font-medium'
+                className='flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition shadow-md font-medium'
               >
                 <Plus className='w-5 h-5' />
                 Create Post
-              </button>*/}
+              </button>
             </div>
 
             {loading ? (
               <div className='flex items-center justify-center py-20'>
-                <div className='animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600'></div>
+                <Loader2 className='animate-spin w-10 h-10 text-blue-600' />
               </div>
             ) : posts.length === 0 ? (
               <div className='bg-white rounded-lg shadow-md p-12 text-center'>
@@ -204,7 +253,7 @@ export default function AdminDashboard() {
                       setIsEditModalOpen(true);
                     }}
                     onDelete={handleDeletePost}
-                    onView={handleViewDetails} // 👁 added view button
+                    onView={handleViewDetails}
                   />
                 ))}
               </div>
@@ -212,22 +261,22 @@ export default function AdminDashboard() {
           </>
         )}
 
-        {/* USERS TAB */}
+        {/* Users Tab */}
         {activeTab === "users" && (
           <div className='bg-white rounded-lg shadow-md overflow-hidden'>
             <table className='min-w-full divide-y divide-gray-200'>
               <thead className='bg-gray-50'>
                 <tr>
-                  <th className='px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
+                  <th className='px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase'>
                     ID
                   </th>
-                  <th className='px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
+                  <th className='px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase'>
                     Username
                   </th>
-                  <th className='px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
+                  <th className='px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase'>
                     Email
                   </th>
-                  <th className='px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
+                  <th className='px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase'>
                     Role
                   </th>
                 </tr>
@@ -261,7 +310,7 @@ export default function AdminDashboard() {
         )}
       </div>
 
-      {/* 🧩 Modals */}
+      {/* Modals */}
       <CreatePostModal
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}

@@ -1,97 +1,128 @@
-import { useState, FormEvent } from 'react';
-import { X } from 'lucide-react';
+import React, { useState } from "react";
+import { X } from "lucide-react";
+import ReactQuill from "react-quill";
+import "react-quill/dist/quill.snow.css";
 
-interface CreatePostModalProps {
+const quillModules = {
+  toolbar: [
+    [{ header: [1, 2, 3, false] }],
+    ["bold", "italic", "underline", "strike"],
+    [{ list: "ordered" }, { list: "bullet" }],
+    ["blockquote", "code-block"],
+    ["link", "image"],
+    [{ align: [] }],
+    ["clean"],
+  ],
+};
+
+const quillFormats = [
+  "header",
+  "bold",
+  "italic",
+  "underline",
+  "strike",
+  "blockquote",
+  "code-block",
+  "list",
+  "bullet",
+  "link",
+  "image",
+  "align",
+];
+
+interface Props {
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (title: string, content: string) => Promise<void>;
 }
 
-export const CreatePostModal: React.FC<CreatePostModalProps> = ({ isOpen, onClose, onSubmit }) => {
-  const [title, setTitle] = useState('');
-  const [content, setContent] = useState('');
+export function CreatePostModal({ isOpen, onClose, onSubmit }: Props) {
+  const [title, setTitle] = useState("");
+  const [content, setContent] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   if (!isOpen) return null;
 
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async () => {
+    if (!title.trim() || !content.trim()) {
+      setError("Please fill in both title and content.");
+      return;
+    }
+    setError("");
     setLoading(true);
-
     try {
-      await onSubmit(title, content);
-      setTitle('');
-      setContent('');
+      await onSubmit(title.trim(), content.trim());
+      setTitle("");
+      setContent("");
       onClose();
-    } catch (error) {
-      console.error('Failed to create post:', error);
+    } catch {
+      setError("Failed to create post. Try again.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <h2 className="text-2xl font-bold text-gray-800">Create New Post</h2>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg transition"
-          >
-            <X className="w-6 h-6 text-gray-600" />
-          </button>
+    <div className='fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4'>
+      <div className='bg-white rounded-xl shadow-lg w-full max-w-3xl p-6 relative'>
+        {/* Close Button */}
+        <button
+          onClick={onClose}
+          className='absolute right-4 top-4 text-gray-400 hover:text-gray-600 transition'
+        >
+          <X className='w-5 h-5' />
+        </button>
+
+        <h2 className='text-2xl font-bold mb-4 text-gray-800'>Create Post</h2>
+
+        {/* Error */}
+        {error && (
+          <div className='mb-4 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg p-2'>
+            {error}
+          </div>
+        )}
+
+        {/* Title */}
+        <div className='space-y-4'>
+          <input
+            type='text'
+            placeholder='Enter title...'
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            className='w-full border border-gray-300 rounded-lg px-3 py-2 text-gray-700 focus:ring-2 focus:ring-blue-500 focus:outline-none'
+          />
+
+          {/* Content */}
+          <ReactQuill
+            value={content}
+            onChange={setContent}
+            modules={quillModules}
+            formats={quillFormats}
+            theme='snow'
+            className='h-48 mb-10'
+            placeholder='Write your post...'
+          />
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          <div>
-            <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-2">
-              Title
-            </label>
-            <input
-              id="title"
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              required
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-              placeholder="Enter post title"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="content" className="block text-sm font-medium text-gray-700 mb-2">
-              Content
-            </label>
-            <textarea
-              id="content"
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              required
-              rows={8}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition resize-none"
-              placeholder="Write your post content here..."
-            />
-          </div>
-
-          <div className="flex gap-3 justify-end">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition font-medium"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loading ? 'Creating...' : 'Create Post'}
-            </button>
-          </div>
-        </form>
+        {/* Actions */}
+        <div className='flex justify-end mt-8 gap-3'>
+          <button
+            onClick={onClose}
+            disabled={loading}
+            className='px-6 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 transition disabled:opacity-50'
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={loading}
+            className='bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition disabled:opacity-50'
+          >
+            {loading ? "Publishing..." : "Publish"}
+          </button>
+        </div>
       </div>
     </div>
   );
-};
+}
