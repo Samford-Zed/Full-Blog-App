@@ -36,7 +36,6 @@ export const PostCard: React.FC<PostCardProps> = ({
   const [loadingLike, setLoadingLike] = useState(false);
   const [showComments, setShowComments] = useState(false);
 
-  // 🩵 Fetch total likes + user like status
   const loadLikes = async () => {
     try {
       const res = await api.get(`/posts/${post.id}/likes`);
