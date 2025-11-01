@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { postsApi } from "../api/posts";
 import api from "../api/client";
@@ -6,6 +6,7 @@ import { Post } from "../types";
 import { PostCard } from "../components/PostCard";
 import { CreatePostModal } from "../components/CreatePostModal";
 import { EditPostModal } from "../components/EditPostModal";
+import { ProfileModal } from "../components/ProfileModal";
 import {
   LogOut,
   Plus,
@@ -14,6 +15,8 @@ import {
   Loader2,
   Heart,
   MessageSquare,
+  User as UserIcon,
+  ChevronDown,
 } from "lucide-react";
 
 export default function UserDashboard() {
@@ -27,14 +30,18 @@ export default function UserDashboard() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
 
-  // 📊 Dashboard stats
+  const profileRef = useRef<HTMLDivElement>(null);
+
   const [stats, setStats] = useState({
     totalPosts: 0,
     totalLikes: 0,
     totalComments: 0,
   });
 
+  // 🔹 Load data
   useEffect(() => {
     if (user) {
       loadUserPosts();
@@ -42,11 +49,25 @@ export default function UserDashboard() {
     }
   }, [user]);
 
-  // ✅ Load only logged-in user's posts
+  // 🔹 Handle click outside to close dropdown
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        profileRef.current &&
+        !profileRef.current.contains(e.target as Node)
+      ) {
+        setProfileOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // 🔹 Load user's posts
   const loadUserPosts = async () => {
     try {
       setLoading(true);
-      const { data } = await api.get("/my-posts"); // backend route for logged-in user
+      const { data } = await api.get("/my-posts");
       setPosts(data);
       setError("");
     } catch (err: any) {
@@ -56,21 +77,18 @@ export default function UserDashboard() {
     }
   };
 
-  // ✅ Load dashboard stats
+  // 🔹 Load stats
   const loadUserStats = async () => {
     try {
-      const { data } = await api.get("/my-stats"); // backend route for logged-in user stats
+      const { data } = await api.get("/my-stats");
       setStats(data);
-    } catch {
-      // silent fallback
-    }
+    } catch {}
   };
 
-  // 🔍 Handle search (by text or tag)
+  // 🔹 Search handler
   const handleSearch = async (e?: React.FormEvent, tagQuery?: string) => {
     e?.preventDefault();
     const searchTerm = tagQuery || query.trim();
-
     if (!searchTerm) {
       loadUserPosts();
       return;
@@ -92,6 +110,7 @@ export default function UserDashboard() {
     }
   };
 
+  // 🔹 Post actions
   const handleCreatePost = async (title: string, content: string) => {
     await postsApi.createPost({ title, content });
     await loadUserPosts();
@@ -112,11 +131,13 @@ export default function UserDashboard() {
     }
   };
 
+  // 🔹 Logout
   const handleLogout = () => {
     logout();
     window.location.href = "/login";
   };
 
+  // 🔹 If user not loaded
   if (!user) {
     return (
       <div className='flex items-center justify-center h-screen text-gray-600 text-lg'>
@@ -128,9 +149,10 @@ export default function UserDashboard() {
   return (
     <div className='min-h-screen bg-gray-50'>
       {/* Navbar */}
-      <nav className='bg-white shadow-md border-b border-gray-200'>
+      <nav className='bg-white shadow-md border-b border-gray-200 relative'>
         <div className='max-w-7xl mx-auto px-4 sm:px-6 lg:px-8'>
           <div className='flex justify-between items-center h-16'>
+            {/* Left side */}
             <div className='flex items-center gap-3'>
               <BookOpen className='w-8 h-8 text-blue-600' />
               <h1 className='text-2xl font-bold text-gray-800'>
@@ -138,17 +160,57 @@ export default function UserDashboard() {
               </h1>
             </div>
 
+            {/* Right side */}
             <div className='flex items-center gap-4'>
-              <span className='text-gray-700 font-medium'>
-                Hello, <span className='text-blue-600'>{user.username}</span>
-              </span>
-              <button
-                onClick={handleLogout}
-                className='flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition'
-              >
-                <LogOut className='w-4 h-4' />
-                Logout
-              </button>
+              <div ref={profileRef} className='relative'>
+                <button
+                  onClick={() => setProfileOpen(!profileOpen)}
+                  className='flex items-center gap-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-full transition'
+                >
+                  <UserIcon className='w-5 h-5 text-gray-700' />
+                  <ChevronDown className='w-4 h-4 text-gray-500' />
+                </button>
+
+                {profileOpen && (
+                  <div className='absolute right-0 mt-3 w-64 bg-white border border-gray-200 rounded-lg shadow-lg z-50 p-4'>
+                    <div className='flex items-center gap-3 mb-4'>
+                      <div className='w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center'>
+                        <UserIcon className='w-5 h-5 text-blue-600' />
+                      </div>
+                      <div>
+                        <p className='font-semibold text-gray-800'>
+                          {user.username}
+                        </p>
+                        <p className='text-sm text-gray-500'>{user.email}</p>
+                      </div>
+                    </div>
+                    <div className='border-t border-gray-100 my-2' />
+                    <p className='text-sm text-gray-600 mb-2'>
+                      Role: <span className='font-medium'>{user.role}</span>
+                    </p>
+
+                    {/* Manage Account */}
+                    <button
+                      onClick={() => {
+                        setProfileOpen(false);
+                        setIsProfileModalOpen(true);
+                      }}
+                      className='w-full mt-2 flex items-center justify-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-md hover:bg-blue-100 transition'
+                    >
+                      Manage Account
+                    </button>
+
+                    {/* Logout */}
+                    <button
+                      onClick={handleLogout}
+                      className='w-full mt-2 flex items-center justify-center gap-2 px-4 py-2 bg-red-50 text-red-600 rounded-md hover:bg-red-100 transition'
+                    >
+                      <LogOut className='w-4 h-4' />
+                      Logout
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -156,7 +218,7 @@ export default function UserDashboard() {
 
       {/* Main content */}
       <main className='max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8'>
-        {/* Overview Stats */}
+        {/* Stats */}
         <div className='grid gap-6 md:grid-cols-3 mb-8'>
           {[
             { title: "Your Posts", value: stats.totalPosts, icon: BookOpen },
@@ -180,7 +242,7 @@ export default function UserDashboard() {
           ))}
         </div>
 
-        {/* Header + Search + Create */}
+        {/* Search & Create */}
         <div className='flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4'>
           <div>
             <h2 className='text-3xl font-bold text-gray-800'>My Posts</h2>
@@ -190,7 +252,6 @@ export default function UserDashboard() {
           </div>
 
           <div className='flex items-center gap-3'>
-            {/* 🔍 Search Bar */}
             <form
               onSubmit={handleSearch}
               className='relative flex items-center w-full md:w-72'
@@ -217,7 +278,6 @@ export default function UserDashboard() {
               )}
             </form>
 
-            {/* ➕ Create Post */}
             <button
               onClick={() => setIsModalOpen(true)}
               className='flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition shadow-md hover:shadow-lg font-medium'
@@ -228,14 +288,14 @@ export default function UserDashboard() {
           </div>
         </div>
 
-        {/* Error Message */}
+        {/* Error */}
         {error && (
           <div className='mb-6 p-4 bg-red-50 border border-red-200 rounded-lg'>
             <p className='text-red-600'>{error}</p>
           </div>
         )}
 
-        {/* Post list / loading states */}
+        {/* Posts */}
         {loading || searching ? (
           <div className='flex items-center justify-center py-20'>
             <Loader2 className='animate-spin w-10 h-10 text-blue-600' />
@@ -268,13 +328,12 @@ export default function UserDashboard() {
         )}
       </main>
 
-      {/* 🧩 Modals */}
+      {/* Modals */}
       <CreatePostModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onSubmit={handleCreatePost}
       />
-
       <EditPostModal
         isOpen={isEditModalOpen}
         post={selectedPost}
@@ -283,6 +342,15 @@ export default function UserDashboard() {
           setSelectedPost(null);
         }}
         onSubmit={handleEditPost}
+      />
+      <ProfileModal
+        isOpen={isProfileModalOpen}
+        onClose={() => setIsProfileModalOpen(false)}
+        user={user}
+        onUpdated={() => {
+          setIsProfileModalOpen(false);
+          window.location.reload();
+        }}
       />
     </div>
   );

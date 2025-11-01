@@ -1,7 +1,5 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "../contexts/AuthContext";
-import { postsApi } from "../api/posts";
-import { authApi } from "../api/auth";
 import { Post, User } from "../types";
 import { PostCard } from "../components/PostCard";
 import { CreatePostModal } from "../components/CreatePostModal";
@@ -17,54 +15,61 @@ import {
   BarChart2,
   Loader2,
 } from "lucide-react";
+import { motion } from "framer-motion";
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  LineChart,
+  Line,
+  CartesianGrid,
+  Legend,
+} from "recharts";
 
 export default function AdminDashboard() {
   const { user, logout } = useAuth();
 
-  const [posts, setPosts] = useState<Post[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState<"overview" | "posts" | "users">(
     "overview"
   );
-
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [stats, setStats] = useState({
+    totalUsers: 0,
+    totalPosts: 0,
+    totalComments: 0,
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const [selectedComments, setSelectedComments] = useState<any[]>([]);
 
-  const [stats, setStats] = useState({
-    userCount: 0,
-    postCount: 0,
-    commentCount: 0,
-  });
-
+  // 🟢 Load data
   useEffect(() => {
     loadData();
   }, [activeTab]);
 
   const loadData = async () => {
+    setLoading(true);
+    setError("");
     try {
-      setLoading(true);
-      setError("");
-
+      if (activeTab === "overview") {
+        const { data } = await api.get("/admin/stats");
+        setStats(data);
+      }
       if (activeTab === "posts") {
-        const postsData = await postsApi.getAllPosts();
-        setPosts(postsData);
-      } else if (activeTab === "users") {
-        const usersData = await authApi.getUsers();
-        setUsers(usersData);
-      } else if (activeTab === "overview") {
-        const postsData = await postsApi.getAllPosts();
-        const usersData = await authApi.getUsers();
-        const { data: commentsData } = await api.get("/comments/count");
-        setStats({
-          userCount: usersData.length,
-          postCount: postsData.length,
-          commentCount: commentsData.count,
-        });
+        const { data } = await api.get("/posts");
+        setPosts(data);
+      }
+      if (activeTab === "users") {
+        const { data } = await api.get("/auth/users");
+        setUsers(data);
       }
     } catch (err: any) {
       setError(err.response?.data?.message || "Failed to load data");
@@ -74,40 +79,34 @@ export default function AdminDashboard() {
   };
 
   const handleCreatePost = async (title: string, content: string) => {
-    await postsApi.createPost({ title, content });
+    await api.post("/posts", { title, content });
     await loadData();
+    setIsCreateModalOpen(false);
   };
 
   const handleEditPost = async (id: number, title: string, content: string) => {
-    await postsApi.updatePost(id, { title, content });
+    await api.put(`/posts/${id}`, { title, content });
     await loadData();
+    setIsEditModalOpen(false);
   };
 
   const handleDeletePost = async (id: number) => {
     if (confirm("Are you sure you want to delete this post?")) {
-      try {
-        await postsApi.deletePost(id);
-        await loadData();
-      } catch (err: any) {
-        setError(err.response?.data?.message || "Failed to delete post");
-      }
+      await api.delete(`/posts/${id}`);
+      await loadData();
     }
+  };
+
+  const handleViewDetails = async (post: Post) => {
+    setSelectedPost(post);
+    const { data } = await api.get(`/posts/${post.id}/comments`);
+    setSelectedComments(data);
+    setIsDetailsModalOpen(true);
   };
 
   const handleLogout = () => {
     logout();
     window.location.href = "/login";
-  };
-
-  const handleViewDetails = async (post: Post) => {
-    try {
-      setSelectedPost(post);
-      const { data } = await api.get(`/posts/${post.id}/comments`);
-      setSelectedComments(data);
-      setIsDetailsModalOpen(true);
-    } catch (err) {
-      console.error("Failed to load comments:", err);
-    }
   };
 
   if (user?.role !== "admin") {
@@ -126,6 +125,20 @@ export default function AdminDashboard() {
     );
   }
 
+  // Prepare chart data dynamically
+  const chartData = [
+    { name: "Users", count: stats.totalUsers },
+    { name: "Posts", count: stats.totalPosts },
+    { name: "Comments", count: stats.totalComments },
+  ];
+
+  const trendData = [
+    { month: "Jan", posts: 4, comments: 8 },
+    { month: "Feb", posts: 6, comments: 12 },
+    { month: "Mar", posts: 5, comments: 10 },
+    { month: "Apr", posts: 8, comments: 15 },
+  ];
+
   return (
     <div className='min-h-screen bg-gray-50'>
       {/* Navbar */}
@@ -140,8 +153,7 @@ export default function AdminDashboard() {
             </div>
             <div className='flex items-center gap-4'>
               <span className='text-gray-700 font-medium'>
-                {user?.username}{" "}
-                <span className='text-sm text-blue-600'>(Admin)</span>
+                {user?.username} <span className='text-sm text-blue-600'></span>
               </span>
               <button
                 onClick={handleLogout}
@@ -155,8 +167,9 @@ export default function AdminDashboard() {
         </div>
       </nav>
 
-      {/* Tabs */}
+      {/* Main */}
       <div className='max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8'>
+        {/* Tabs */}
         <div className='flex gap-4 mb-8'>
           {[
             { key: "overview", label: "Overview", icon: BarChart2 },
@@ -178,46 +191,110 @@ export default function AdminDashboard() {
           ))}
         </div>
 
-        {/* Error Display */}
+        {/* Error / Loading */}
         {error && (
           <div className='mb-6 p-4 bg-red-50 border border-red-200 rounded-lg'>
             <p className='text-red-600'>{error}</p>
           </div>
         )}
-
-        {/* Overview Tab */}
-        {activeTab === "overview" && (
-          <div className='grid gap-6 md:grid-cols-3'>
-            {[
-              {
-                title: "Total Users",
-                value: stats.userCount,
-                color: "bg-blue-100 text-blue-700",
-              },
-              {
-                title: "Total Posts",
-                value: stats.postCount,
-                color: "bg-green-100 text-green-700",
-              },
-              {
-                title: "Total Comments",
-                value: stats.commentCount,
-                color: "bg-yellow-100 text-yellow-700",
-              },
-            ].map(({ title, value, color }) => (
-              <div
-                key={title}
-                className={`p-6 rounded-lg shadow bg-white border ${color}`}
-              >
-                <h2 className='text-lg font-semibold'>{title}</h2>
-                <p className='text-3xl font-bold mt-2'>{value}</p>
-              </div>
-            ))}
+        {loading && (
+          <div className='flex items-center justify-center py-12'>
+            <Loader2 className='animate-spin w-10 h-10 text-blue-600' />
           </div>
         )}
 
-        {/* Posts Tab */}
-        {activeTab === "posts" && (
+        {/* Overview */}
+        {!loading && activeTab === "overview" && (
+          <div className='space-y-10'>
+            {/* Animated KPI Cards */}
+            <div className='grid gap-6 md:grid-cols-3'>
+              {[
+                {
+                  title: "Total Users",
+                  value: stats.totalUsers,
+                  color: "text-blue-700",
+                },
+                {
+                  title: "Total Posts",
+                  value: stats.totalPosts,
+                  color: "text-green-700",
+                },
+                {
+                  title: "Total Comments",
+                  value: stats.totalComments,
+                  color: "text-yellow-700",
+                },
+              ].map(({ title, value, color }, i) => (
+                <motion.div
+                  key={title}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.2 }}
+                  className='p-6 rounded-xl shadow bg-white border border-gray-100 hover:shadow-lg transition-all'
+                >
+                  <h2 className={`text-lg font-semibold ${color}`}>{title}</h2>
+                  <motion.p
+                    key={value}
+                    initial={{ scale: 0.8 }}
+                    animate={{ scale: 1 }}
+                    transition={{ type: "spring", stiffness: 120 }}
+                    className={`text-4xl font-bold mt-2 ${color}`}
+                  >
+                    {value}
+                  </motion.p>
+                </motion.div>
+              ))}
+            </div>
+
+            {/* Bar Chart */}
+            <div className='bg-white p-6 rounded-xl shadow border border-gray-100'>
+              <h3 className='text-lg font-semibold text-gray-800 mb-4'>
+                System Overview
+              </h3>
+              <ResponsiveContainer width='100%' height={300}>
+                <BarChart data={chartData}>
+                  <CartesianGrid strokeDasharray='3 3' />
+                  <XAxis dataKey='name' />
+                  <YAxis />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey='count' fill='#3B82F6' radius={[8, 8, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Line Chart */}
+            <div className='bg-white p-6 rounded-xl shadow border border-gray-100'>
+              <h3 className='text-lg font-semibold text-gray-800 mb-4'>
+                Posts & Comments Trend
+              </h3>
+              <ResponsiveContainer width='100%' height={300}>
+                <LineChart data={trendData}>
+                  <CartesianGrid strokeDasharray='3 3' />
+                  <XAxis dataKey='month' />
+                  <YAxis />
+                  <Tooltip />
+                  <Legend />
+                  <Line
+                    type='monotone'
+                    dataKey='posts'
+                    stroke='#10B981'
+                    strokeWidth={2}
+                  />
+                  <Line
+                    type='monotone'
+                    dataKey='comments'
+                    stroke='#F59E0B'
+                    strokeWidth={2}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        )}
+
+        {/* Manage Posts */}
+        {!loading && activeTab === "posts" && (
           <>
             <div className='flex justify-between items-center mb-8'>
               <h2 className='text-3xl font-bold text-gray-800'>All Posts</h2>
@@ -230,11 +307,7 @@ export default function AdminDashboard() {
               </button>
             </div>
 
-            {loading ? (
-              <div className='flex items-center justify-center py-20'>
-                <Loader2 className='animate-spin w-10 h-10 text-blue-600' />
-              </div>
-            ) : posts.length === 0 ? (
+            {posts.length === 0 ? (
               <div className='bg-white rounded-lg shadow-md p-12 text-center'>
                 <BookOpen className='w-16 h-16 text-gray-300 mx-auto mb-4' />
                 <h3 className='text-xl font-semibold text-gray-700 mb-2'>
@@ -261,8 +334,8 @@ export default function AdminDashboard() {
           </>
         )}
 
-        {/* Users Tab */}
-        {activeTab === "users" && (
+        {/* Manage Users */}
+        {!loading && activeTab === "users" && (
           <div className='bg-white rounded-lg shadow-md overflow-hidden'>
             <table className='min-w-full divide-y divide-gray-200'>
               <thead className='bg-gray-50'>
