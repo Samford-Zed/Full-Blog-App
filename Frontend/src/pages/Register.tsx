@@ -4,7 +4,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { UserPlus } from "lucide-react";
 
 export default function Register() {
-  // ✅ Default export for App.tsx import
+  
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
