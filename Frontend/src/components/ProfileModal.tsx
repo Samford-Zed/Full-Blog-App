@@ -151,7 +151,7 @@ export function ProfileModal({
           </button>
         </div>
 
-        {/* Feedback */}
+        {/* Feback */}
         {message && (
           <p className='text-center text-sm text-gray-700 mt-4'>{message}</p>
         )}
@@ -159,3 +159,4 @@ export function ProfileModal({
     </div>
   );
 }
+
