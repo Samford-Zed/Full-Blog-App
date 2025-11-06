@@ -105,7 +105,7 @@ export function CreatePostModal({ isOpen, onClose, onSubmit }: Props) {
           />
         </div>
 
-        {/* Actions */}
+        {/* Action */}
         <div className='flex justify-end mt-8 gap-3'>
           <button
             onClick={onClose}
