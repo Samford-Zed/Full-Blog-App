@@ -241,7 +241,7 @@ app.get("/api/comments/count", authenticateToken, async (req, res) => {
 
 // ─── Likes System ───────────────────────────────────────────────────
 
-// ✅ Toggle Like / Unlike
+// ✅ Toggle Like 
 app.post("/api/posts/:id/like", authenticateToken, async (req, res) => {
   try {
     const postId = req.params.id;
@@ -364,5 +364,6 @@ pool
     console.error("❌ Database connection error:", err);
     process.exit(1);
   });
+
 
 
