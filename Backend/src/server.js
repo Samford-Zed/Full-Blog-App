@@ -37,7 +37,7 @@ const pool = new Pool({
   database: process.env.DB_NAME,
 });
 
-// ─── Authentication Middleware ──────────────────────────────────────
+// ─── Authentication ──────────────────────────────────────
 function authenticateToken(req, res, next) {
   const authHeader = req.headers["authorization"];
   const token = authHeader && authHeader.split(" ")[1];
@@ -364,3 +364,4 @@ pool
     console.error("❌ Database connection error:", err);
     process.exit(1);
   });
+
