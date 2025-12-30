@@ -226,7 +226,7 @@ app.get("/api/admin/stats", authenticateToken, isAdmin, async (req, res) => {
   }
 });
 
-// 🟢 Get total comments count (for dashboard or analytics)
+// 🟢 Get total comments count (for dashboard )
 app.get("/api/comments/count", authenticateToken, async (req, res) => {
   try {
     const result = await pool.query(
@@ -364,4 +364,5 @@ pool
     console.error("❌ Database connection error:", err);
     process.exit(1);
   });
+
 
