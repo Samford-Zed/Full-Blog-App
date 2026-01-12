@@ -174,7 +174,8 @@ npm run dev
 </main>
 
 <footer>
-  <p>Made with ❤️ by <strong>Samuel Zenebe</strong> — Full Stack Developer</p>
+  
+</p>
 
 </body>
 </html>
